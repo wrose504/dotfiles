@@ -1,0 +1,258 @@
+version: '3.7'
+services:
+  app:
+    image: picnichealth/app:latest
+    pull_policy: missing
+    environment:
+      # Have the remote node process listen for debugger connections to allow VS Code to connect
+      # to the API backend running in the container.
+      - DEBUG=1
+      - PGBOUNCER_ENABLED=
+      - PDF_UTILS_API_URL=http://pdf-utils:9003/api/v0
+      # Personal test API keys
+      - SECRET__PHAXIO_API_KEY=27q85ibxfoe5s8u1l9r4s1juo82a0q7fl00hz6cz
+      - SECRET__PHAXIO_API_SECRET=59gtylgix2jh61csroibj0c6kq5nvale9lbt69hp
+
+    # Use the alternate startup script for the API backend that does not invoke webpack or
+    # other code generation tools: instead, run these outside Docker where they perform much
+    # better.
+    # Webpack:
+    #   cd packages/app; npx webpack --config config/webpack/index.js
+    # Apollo (one-off code generation):
+    #   yarn --cwd packages/app apollo:codegen
+    command:
+      - bash
+      - server-only.sh
+
+  # nginx
+  # Replace with envoy for easier debugging
+  # nginx:
+  #   image: envoyproxy/envoy:v1.23-latest
+  #   volumes:
+  #     - ./infra/local/envoy.yaml:/etc/envoy/envoy.yaml:ro
+  #     - ./infra/local/certs/config/live/picnic.lol/privkey.pem:/etc/envoy/privkey.pem:ro
+  #     - ./infra/local/certs/config/live/picnic.lol/fullchain.pem:/etc/envoy/fullchain.pem:ro
+
+  # elasticsearch:
+  #   image: library/elasticsearch:7.14.2
+  #   environment:
+  #     discovery.type: single-node
+  #     bootstrap.memory_lock: "true"
+  #     ES_JAVA_OPTS: -Xms256m -Xmx256m
+  #     http.port: "9200"
+  #     http.cors.enabled: "true"
+  #     http.cors.allow-origin: http://localhost:5601,http://127.0.0.1:5601,http://kibana:5601
+  #     http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+  #     http.cors.allow-credentials: "true"
+
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.14.2
+  #   ports:
+  #     - '5601:5601'
+  #   environment:
+  #     SERVER_NAME: kibana
+  #     ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+  #   links:
+  #     - elasticsearchx
+
+  # dejavu:
+  #   image: appbaseio/dejavu:3.4.7
+  #   ports:
+  #     - '1358:1358'
+  #   links:
+  #     - elasticsearch
+
+  hasura:
+    environment:
+      # Enable detailed query logging in Hasura to be able to see the generated SQL.
+      - HASURA_GRAPHQL_DEV_MODE=true
+
+  # OCR service invoked via jobs queue table in Postgres when new PDFs are uploaded.
+  # Build the image first:
+  #   cd python/picnic/visor; make build-image
+  # visor:
+  #   profiles:
+  #     - visor
+  #   image: gcr.io/staging-176122/visor:latest
+  #   working_dir: /
+  #   env_file:
+  #     - ./infra/local/secrets/local.env
+  #   environment:
+  #     - USER
+  #     - MAIN_MODULE=picnic.visor.tasks
+  #     - PYTHON_ENV=local
+  #     - PGBOUNCER_ENABLED=
+  #     - DB_PORT
+  #     - DB_NAME
+  #     - TMPDIR=/picnic/ml_models
+  #     - GOOGLE_APPLICATION_CREDENTIALS=/picnic/infra/local/creds/gcp.json
+  #   volumes:
+  #     - ./python/picnic:/picnic:delegated
+  #     - ./infra:/picnic/infra:ro
+
+  # PDF utility service (e.g. to convert uploaded images to PDF).
+  # Build the image first:
+  #   make build-js-pdf-utils-image
+  pdf-utils:
+    profiles:
+      - full
+    image: gcr.io/staging-176122/pdf-utils:latest
+    command:
+      - npm
+      - run
+      - dev
+    working_dir: /picnic/packages/pdf-utils
+    env_file:
+      - ./infra/local/secrets/local.env
+    environment:
+      - USER
+      - PGBOUNCER_ENABLED=
+      - PORT=9003
+      - DB_PORT
+      - DB_NAME
+      - TMPDIR=/download
+      - GOOGLE_APPLICATION_CREDENTIALS=/picnic/infra/local/creds/gcp.json
+    ports:
+      - "9003:9003"
+      - "9232:9232"
+    volumes:
+      - ./infra:/picnic/infra:ro
+      - ./packages/pdf-utils/src:/picnic/packages/pdf-utils/src:delegated
+      - ./packages/pdf-utils/dist:/picnic/packages/pdf-utils/dist:delegated
+      - ./packages/pdf-utils/package.json:/picnic/packages/pdf-utils/package.json:delegated
+    tmpfs:
+      - /download
+
+  # Labelling (i.e. structured data field) prediction service invoked via API call on port 9001 during
+  # field correction tasks.
+  # Build the image first:
+  #   cd python/picnic/labelling; make build-image
+  labelling:
+    profiles:
+      - labelling
+    image: gcr.io/staging-176122/labelling:latest
+    env_file:
+      - ./infra/local/secrets/local.env
+    environment:
+      - USER
+      - MODE=api
+      - ML_STORAGE_BUCKET=picnic-ml-models-local
+      - PYTHON_ENV=local
+      - PGBOUNCER_ENABLED=
+      - DB_PORT
+      - DB_NAME
+      - GOOGLE_APPLICATION_CREDENTIALS=/picnic/infra/local/creds/gcp.json
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./python/picnic:/picnic:delegated
+      - ./infra:/picnic/infra:ro
+    tty: false
+
+  # Trial run task generation service used to generate tasks for training or agreement studies.
+  # Monitors Postgres jobs queue table for requests to create trial run tasks.
+  # Build the image first:
+  #   cd python/picnic/trialing; make build-image
+  # trialing:
+  #   image: picnichealth/trialing:latest
+  #   env_file:
+  #     - ./infra/local/secrets/local.env
+  #   environment:
+  #     - USER
+  #     - GCP_BUCKET=picnic-uploads-local
+  #     - PYTHON_ENV=local
+  #     - PGBOUNCER_ENABLED
+  #     - DB_PORT
+  #     - DB_NAME
+  #     - GOOGLE_APPLICATION_CREDENTIALS=/picnic/gcp_creds/local.json
+  #     - GOOGLE_STORAGE_CREDENTIALS=/picnic/gcp_creds/storage/local.json
+  #   volumes:
+  #     - ./python/picnic:/picnic:delegated
+  #     - ./infra:/picnic/infra:ro
+  #   tty: false
+
+  # Section prediction service used to suggest section boundaries and metadata in new segmentation UI.
+  # Currently a stub service that returns random predictions that do not always make sense.
+  # Build the image first:
+  #   cd python/picnic/section_ml; make build-image
+  # section-ml:
+  #   image: picnichealth/section-ml:latest
+  #   env_file:
+  #     - ./infra/local/secrets/local.env
+  #   environment:
+  #     - USER
+  #     - ML_STORAGE_BUCKET=picnic-ml-models-local
+  #     - PYTHON_ENV=local
+  #     - PGBOUNCER_ENABLED
+  #     - DB_PORT
+  #     - DB_NAME
+  #     - GOOGLE_APPLICATION_CREDENTIALS=/picnic/infra/local/creds/gcp.json
+  #     - COMMAND=make run-service
+  #   ports:
+  #     - "9004:9004"
+  #   volumes:
+  #     - ./python/picnic:/picnic:delegated
+  #     - /tmp:/tmp:delegated
+  #     - ./infra:/picnic/infra:ro
+  #   tty: false
+
+  # Patient synthesis service
+  # Build the image first:
+  #   cd packages/patient-synthesis; make build-image
+  # patient-synthesis:
+  #   image: gcr.io/staging-176122/patient-synthesis:latest
+  #   command:
+  #     - node
+  #     - --inspect=0.0.0.0:9231
+  #     - dist/index.js
+  #   env_file:
+  #     - ./infra/local/secrets/local.env
+  #   environment:
+  #     - USER
+  #     - PGBOUNCER_ENABLED=
+  #     - LOG_LEVEL=INFO
+  #     - DB_HOST=host.docker.internal
+  #     - DB_PORT
+  #     - DB_NAME
+  #     - PATIENT_SYNTHESIS_APP_WEBHOOK_BASE_URL=http://app:4000/api/v0
+  #   restart: "no"
+  #   ports:
+  #     - "9231:9231"
+  #   volumes:
+  #     - ./packages/patient-synthesis/dist:/picnic/packages/patient-synthesis/dist:delegated
+  #     - ./packages/patient-synthesis/src:/picnic/packages/patient-synthesis/src:delegated
+  #     - ./packages/patient-synthesis/synthesizers:/picnic/packages/patient-synthesis/synthesizers:delegated
+  #     - ./infra:/picnic/infra:ro
+
+  # DICOM processing invoked via jobs queue table in Postgres when new dicoms are uploaded.
+  # Build the image first:
+  #   cd python/picnic/dicom; make build-image
+  dicom:
+    profiles:
+      - dicom
+    image: gcr.io/staging-176122/dicom:latest
+    depends_on:
+      - redis
+    links:
+      - redis
+    env_file:
+      - ./infra/local/secrets/local.env
+    environment:
+      - USER
+      - ML_STORAGE_BUCKET=picnic-uploads-local
+      - PYTHON_ENV=local
+      - PGBOUNCER_ENABLED
+      - DB_PORT
+      - DB_NAME
+      - DEV_LOCAL_IP=host.docker.internal
+      - GOOGLE_APPLICATION_CREDENTIALS=/picnic/infra/local/creds/gcp.json
+      - GCP_PROJECT_ID=local-184120
+      - GCP_BUCKET=picnic-uploads-local
+      - REDIS_HOST=redis
+    volumes:
+      # Uncomment for most dev, unfortunately the packages/tools does not work
+      # - ./python/picnic:/picnic:delegated
+      - ./infra:/picnic/infra:ro
+  # socket-io-proxy:
+  #   ports:
+  #     - '9230:9230'
