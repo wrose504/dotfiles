@@ -1,0 +1,71 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Picnic App (Remote)",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9229,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/picnic",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "name": "Socket.IO Proxy (Remote)",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9230,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/picnic",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "name": "Picnic App (Feature Branch)",
+      "request": "attach",
+      "address": "localhost",
+      "port": 19229,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/picnic",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "sourceMapPathOverrides": {
+        "/picnic/*": "${workspaceRoot}/*"
+      },
+      "type": "node"
+    },
+    {
+      "name": "Patient Synthesis (Remote)",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9231,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/picnic",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "name": "PDF Utils (Remote)",
+      "request": "attach",
+      "address": "localhost",
+      "port": 9232,
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/picnic",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    }
+  ]
+}
