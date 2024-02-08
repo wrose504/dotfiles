@@ -1,5 +1,5 @@
 #!/bin/bash
-cd "$(dirname "$BASH_SOURCE")"
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 function log {
   echo "[$(date +'%F %T')] $*"

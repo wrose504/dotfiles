@@ -1,28 +1,16 @@
 version: '3.7'
 services:
   app:
-    image: picnichealth/app:latest
-    pull_policy: missing
+    # image: picnichealth/app:latest
+    # pull_policy: missing
     environment:
       # Have the remote node process listen for debugger connections to allow VS Code to connect
       # to the API backend running in the container.
       - DEBUG=1
-      - PGBOUNCER_ENABLED=
-      - PDF_UTILS_API_URL=http://pdf-utils:9003/api/v0
+      # - PGBOUNCER_ENABLED=
       # Personal test API keys
-      - SECRET__PHAXIO_API_KEY=27q85ibxfoe5s8u1l9r4s1juo82a0q7fl00hz6cz
-      - SECRET__PHAXIO_API_SECRET=59gtylgix2jh61csroibj0c6kq5nvale9lbt69hp
-
-    # Use the alternate startup script for the API backend that does not invoke webpack or
-    # other code generation tools: instead, run these outside Docker where they perform much
-    # better.
-    # Webpack:
-    #   cd packages/app; npx webpack --config config/webpack/index.js
-    # Apollo (one-off code generation):
-    #   yarn --cwd packages/app apollo:codegen
-    command:
-      - bash
-      - server-only.sh
+      # - SECRET__PHAXIO_API_KEY=27q85ibxfoe5s8u1l9r4s1juo82a0q7fl00hz6cz
+      # - SECRET__PHAXIO_API_SECRET=59gtylgix2jh61csroibj0c6kq5nvale9lbt69hp
 
   # nginx
   # Replace with envoy for easier debugging
