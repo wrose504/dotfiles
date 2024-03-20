@@ -1,4 +1,6 @@
 #!/bin/bash
+set -euo pipefail
+
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 function log {
@@ -6,8 +8,11 @@ function log {
 }
 
 # Set up our .zshrc, replacing if it exists.
-log "Copying .zshrc"
-cp -f "./zshrc" "$HOME/.zshrc"
+for file in bashrc zshrc
+do
+  log "Copying .${file}"
+  cp -f "./${file}" "$HOME/.${file}"
+done
 
 # Try to find the checked out repo root
 # In gitpod we have an environment variable. In coder, it's just ~/picnic.
